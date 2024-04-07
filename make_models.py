@@ -30,9 +30,9 @@ def for_one_label(df, label, num_epochs, save=False, save_name=None):
     labels = np.array(df[label])
 
     lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(factor=.5, patience=3, monitor='loss')
-    model.compile(optimizer=Adam(3e-5), metrics='accuracy')  # No loss argument!
+    model.compile(optimizer=Adam(3e-5), metrics='accuracy')
 
-    model.fit(tokenized_data, labels, epochs=num_epochs, verbose=True, callbacks=[lr_scheduler])
+    model.fit(tokenized_data, labels, epochs=num_epochs, verbose=True, callbacks=[lr_scheduler],class_weight ={0: 1., 1: 50.})
     if save:
         tokenizer.save_pretrained(save_name)
         model.save_pretrained(save_name)
