@@ -137,7 +137,7 @@ def make_history_graph(history):
     plt.xlabel('epoch')
     plt.legend(['train', 'test'])
     plt.show()
-    # summarize history for loss
+    # history for loss
     plt.plot(history['loss'])
     plt.plot(history['val_loss'])
     plt.title('model loss')
