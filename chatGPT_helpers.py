@@ -4,6 +4,7 @@ import pickle
 from utils import tokenize_data, truncate_clinical_note
 import os
 
+# Set up openAI api key
 key = os.environ.get("OPENAI_API_KEY")
 client = OpenAI(
     api_key= key
@@ -12,7 +13,16 @@ client = OpenAI(
 openai.api_key = key
 
 
-def zero_shot_prompt(note, label, MAX_TOKENS=3500):
+def zero_shot_prompt(note, label, MAX_TOKENS=3500, verbose=False):
+    '''
+    Asks the api if the given note meets the requirements associated with the given label.
+
+    Arguments:
+    note - the note to ask about
+    label - the label whose requirements need to be met
+    MAX_TOKENS - the maximum number of tokens to shorten the prompt to
+    verbose - flag for extra prints
+    '''
     requirements = {
     "DRUG-ABUSE": "Drug abuse, current or past",
     "ALCOHOL-ABUSE": "Current alcohol use over weekly recommended limits",
@@ -28,12 +38,14 @@ def zero_shot_prompt(note, label, MAX_TOKENS=3500):
     "HBA1C": "Any hemoglobin A1c (HbA1c) value between 6.5% and 9.5%",
     "CREATININE": "Serum creatinine > upper limit of normal",
     }
-    print("predicting note:", note[10:15], "for label:", label)
-    print("truncating note...")
+    if verbose:
+        print("predicting note:", note[10:15], "for label:", label) 
+        print("truncating note...")
+    # Truncate the note, if needed
     words = truncate_clinical_note(tokenize_data(note), MAX_TOKENS)
     prompt = f"Please check this requirement: f{requirements[label]}. Is this requirement met? Answer with YES, NO, or UNSURE."
     words_with_prompt = words + "\n" + prompt
-
+    # Prompt the API
     chat_completion = openai.chat.completions.create(
         messages=[
             {
@@ -43,16 +55,27 @@ def zero_shot_prompt(note, label, MAX_TOKENS=3500):
         ],
         model="gpt-3.5-turbo",
         max_tokens=2,
-        temperature=.3
+        temperature=.3 # Low temperature used b/c we don't want too much confidence
     )
-
+    # Get response
     response = chat_completion.choices[0].message.content
-    print("Prediction complete with:", response)
+    if verbose:
+        print("Prediction complete with:", response)
     return response
 
 
-def summarize_prompt(note, MAX_TOKENS=3500):
-    print("truncating note...")
+def summarize_prompt(note, MAX_TOKENS=3500, verbose=False):
+    '''
+    Asks the api to summarize the given note to information about the label requirements.
+
+    Arguments:
+    note - the note to summarize
+    MAX_TOKENS - the maximum number of tokens to shorten the prompt to
+    verbose - flag for extra prints
+    '''
+    if verbose:
+        print("truncating note...")
+    # Shorten the note, if necessary
     words = truncate_clinical_note(tokenize_data(note), MAX_TOKENS)
     prompt = ("please summarize the clinical note above to the following information:\n"
             "1. DRUG-ABUSE: Drug abuse, current or past\n"
@@ -79,7 +102,9 @@ def summarize_prompt(note, MAX_TOKENS=3500):
             "12. HBA1C: Any hemoglobin A1c (HbA1c) value between 6.5% and 9.5%\n"
             "13. CREATININE: Serum creatinine > upper limit of normal")
     words_with_prompt = words + "\n" + prompt
-    print("Asking for summary...")
+    if verbose:
+        print("Asking for summary...")
+    # Prompt the api
     chat_completion = openai.chat.completions.create(
         messages=[
             {
@@ -91,26 +116,37 @@ def summarize_prompt(note, MAX_TOKENS=3500):
         max_tokens=512,
         temperature=.3
     )
-
+    # Get the response
     response = chat_completion.choices[0].message.content
-    print("Summarization complete")
+    if verbose:
+        print("Summarization complete")
     return response
 
-def summarize_and_save_notes(notes, name='train', MAX_TOKENS=3500):
-    summaries = []
-    for i in range(len(notes)):
-        print("predicting note:", i)
-        summaries.append(summarize_prompt(notes[i]))
-    print("Number of summaries completed:", len(summaries))
-    # Specify the file path
-    file_path = f'summarized_notes_{name}.pkl'
+def summarize_and_save_notes(notes, name='train', MAX_TOKENS=3500, verbose=False):
+    '''
+    Summarize the given list of notes wiht the api.
 
+    Arguments:
+    notes - the list of notes to summarize
+    name - the name to save the summaries with
+    MAX_TOKENS - the maximum number of tokens to shorten the prompt to
+    verbose - flag for extra prints
+    '''
+    summaries = []
+    # Get the summaries
+    for i in range(len(notes)):
+        if verbose:
+            print("predicting note:", i)
+        summaries.append(summarize_prompt(notes[i], verbose=verbose))
+    if verbose:
+        print("Number of summaries completed:", len(summaries))
+    # Save the summaries
+    file_path = f'summarized_notes_{name}.pkl'
     try:
-        # Write the list to the file using pickle
         with open(file_path, 'wb') as file:
             pickle.dump(summaries, file)
 
-        # Load the list back from the file
+        # Check that it saved correctly (done b/c each run is $$$$)
         with open(file_path, 'rb') as file:
             loaded_list = pickle.load(file)
 

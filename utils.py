@@ -8,6 +8,15 @@ from nltk.corpus import stopwords
 import re
 
 def tokenize_data(note):
+    '''
+    Removes stopwords and extra whitespace.
+
+    Arguments:
+    note - string to tokenize
+
+    Returns:
+    String
+    '''
     nltk.download('stopwords', quiet=True)
     stop_words = set(stopwords.words('english'))
     pattern = r"[\n\s*]+|\.\s+"
@@ -19,6 +28,15 @@ def tokenize_data(note):
 
 
 def truncate_clinical_note(note, MAX_TOKENS = 3500):
+    '''
+    Removes every Xth word until note has < MAX_TOKENS.
+
+    Arguments:
+    note - string to truncate
+
+    Returns:
+    String
+    '''
     tokenized_words = tokenize_data(note).split()
     num_tokens = len(tokenized_words)
 
@@ -31,6 +49,12 @@ def truncate_clinical_note(note, MAX_TOKENS = 3500):
     return " ".join(tokenized_words)
 
 def display_histogram(data):
+    '''
+    Displays a histogram for the lengths of the notes in data.
+
+    Arguments:
+    data - DataFrame containing a 'notes' column of strings
+    '''
     lengths = [len(note.split()) for note in data['notes']]
 
     x = [length for length in lengths]
@@ -42,10 +66,21 @@ def display_histogram(data):
     plt.show()
 
 def get_note_data(labels, folder_name='train'):
+    '''
+    Loads the notes into a dataframe.
+
+    Arguments:
+    labels - List[Str] of the labels that should be included in the DataFrame
+
+    Returns:
+    DataFrame with DataFrame.columns = ['notes', labels]
+    '''
+    # Set up DataFrame
     headers = ["notes"]
     headers.extend(labels)
     overall_df = pd.DataFrame(columns=headers)
 
+    # Read the files in
     current_directory = os.getcwd()
     directory = os.path.join(current_directory, folder_name)
     for filename in os.listdir(directory):
@@ -55,37 +90,70 @@ def get_note_data(labels, folder_name='train'):
             # Load the XML file
             tree = ET.parse(os.path.join(directory, filename))
             root = tree.getroot()
-            # Access elements and attributes
+            # Get the text and labels
             for child in root:
+                # Text
                 if child.tag == "TEXT":
                     note = child.text
                     row_to_add['notes'] = note
+                # Labels
                 if child.tag == "TAGS":
                     for subchild in child:
                         row_to_add[subchild.tag] = 1 if subchild.attrib.get('met') == 'met' else 0
             overall_df.loc[patient_num] = row_to_add
-
     return overall_df
 
 
 def save_preds(label_to_predictions, name):
+    '''
+    Save the given dictionary's predictions as a csv.
+
+    Arguments:
+    label_to_predictions - Dictionary{Str -> List[int]} (label to predictions)
+    name - save name, .csv will be added for you (do not include it)
+    '''
     dfp = pd.DataFrame.from_dict(label_to_predictions, orient='index')
     dfp.to_csv(f'{name}.csv')
 
 def read_preds(name):
+    '''
+    Read the given name.csv into a dictionary.
+
+    Arguments:
+    name - save name, .csv will be added for you (do not include it)
+
+    Returns:
+    Dictionary{Str -> List[int]} (label to predictions)
+    '''
     # Read in prediction data:
     dfp = pd.read_csv(f'{name}.csv')
     label_to_predictions = {}
-    for index, row in dfp.iterrows():
+    for _, row in dfp.iterrows():
         label_to_predictions[row[0]] = list(row[1:])
     return label_to_predictions
 
 def get_f1_scores_for_labels(labels, y_true_source, y_pred_source, verbose=True):
+    '''
+    Gets the micro f1 score for the given labels using the given true and preds, as well as overall f1.
+
+    Micro f1 is calculated as the average of f1 for positive and f1 for negative.
+    Overall f1 is calculated as the average of the micro f1s of all the labels.
+
+    Arguments:
+    labels - List of labels to calculate for
+    y_true_source - dictionary of label -> true values
+    y_pred_source - dictionary of label -> predicted values
+    verbose - Flag for extra printse
+
+    Returns:
+    Dictionary{Str -> int} (label to micro-f1), int (overall-f1)
+    '''
     label_to_micro_f1 = {}
     for label in labels:
         if label in y_pred_source:
-            mtp, mtn, mfp, mfn = 0, 0, 0, 0
-            ntp, ntn, nfp, nfn = 0, 0, 0, 0
+            mtp, mtn, mfp, mfn = 0, 0, 0, 0 # m stands for met
+            ntp, ntn, nfp, nfn = 0, 0, 0, 0 # n stands for not met
+            # Calculate f1 for both
             for true, pred in zip(y_true_source[label], y_pred_source[label]):
                 if true == 1:
                     if pred == true:
@@ -121,14 +189,24 @@ def get_f1_scores_for_labels(labels, y_true_source, y_pred_source, verbose=True)
                 nf1 = 0
             else:
                 nf1 = 2*nprecision*nrecall / (nprecision + nrecall)
+            # Then average them together
             micro_f1 = (mf1 + nf1) / 2
             label_to_micro_f1[label] = micro_f1
             if verbose:
                 print("Raw f1 for", label, micro_f1)
+    # Calculate overall
     overall_f1 = np.mean(list(label_to_micro_f1.values()))
     return label_to_micro_f1, overall_f1
 
 def make_history_graph(history):
+    '''
+    Function to produce a graph given a history.
+
+    history should be the dictionary, not the callback - use history.history if it is.
+
+    Arguments:
+    history - dictionary with accuracy, val_accuracy, loss, and val_loss over epochs
+    '''
     # history for accuracy
     plt.plot(history['accuracy'])
     plt.plot(history['val_accuracy'])
