@@ -29,8 +29,8 @@ def for_one_label(df, label, num_epochs=10, return_history=False, test_data=None
     model = tf.keras.Sequential([
         model_,
         tf.keras.layers.Lambda(lambda x: x[0][:,0,:]), # https://keras.io/api/layers/core_layers/lambda/
-        tf.keras.layers.Dense(2048,activation="relu"),
-        tf.keras.layers.Dense(2048,activation="relu"),
+        tf.keras.layers.Dense(512,activation="relu"),
+        tf.keras.layers.Dense(512,activation="relu"),
         tf.keras.layers.Dense(1,activation="sigmoid")
     ])
 
@@ -90,7 +90,10 @@ def for_passed_labels(labels, df, epochs=10, return_history=False, verbose=False
         models[label] = model
         if return_history:
             histories[label] = history
-    return models, histories
+    if return_history:
+        return models, histories
+    else:
+        return models
 
 def get_predictions(model, test_data, threshold=.5, verbose=True):
     # Tokenize and pad the clinical notes
@@ -100,21 +103,21 @@ def get_predictions(model, test_data, threshold=.5, verbose=True):
     tokenized_data = dict(tokenized_notes)
     # Get preds
     model_predictions = model.predict(tokenized_data)
-    print(model_predictions)
     try:
         probabilities = tf.nn.sigmoid(model_predictions.logits).numpy()
+        predictions = np.where(probabilities < threshold, 0, 1)
+        return predictions
     except AttributeError:
         probabilities = tf.nn.sigmoid(model_predictions).numpy()
-    predictions = (probabilities[:,0] < threshold).astype(int).tolist()
-    return predictions
+        predictions = np.where(probabilities < threshold, 0, 1)[:,0].tolist()
+        return predictions
 
 
-def create_multi_label(train_data, num_epochs=10, save=True):
+def create_multi_label(train_data, test_data=None, num_epochs=10, save=True):
     # Load tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
     model = TFAutoModelForSequenceClassification.from_pretrained("emilyalsentzer/Bio_ClinicalBERT", num_labels=13, problem_type="multi_label_classification")
     model.layers[0].trainable = False
-
 
     # Tokenize and pad the clinical notes
     clinical_notes = list(train_data['notes'])
@@ -122,6 +125,11 @@ def create_multi_label(train_data, num_epochs=10, save=True):
     tokenized_notes = tokenizer(clinical_notes, padding='max_length', max_length=512, truncation=True, return_tensors="tf")
     tokenized_data = dict(tokenized_notes)
     labels = np.array(train_data.drop(columns=['notes'], inplace=False))
+
+    if not test_data is None:
+        cn_test = [truncate_clinical_note(tokenize_data(note), 512) for note in list(test_data['notes'])]
+        tokenized_test = dict(tokenizer(cn_test, padding='max_length', max_length=512, truncation=True, return_tensors="tf"))
+        labels_test = np.array(test_data.drop(columns=['notes'], inplace=False))
 
     # Set up class weights
     class_weights_dict = {}
@@ -134,7 +142,12 @@ def create_multi_label(train_data, num_epochs=10, save=True):
     lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(factor=.5, patience=3, monitor='loss')
     model.compile(loss="binary_crossentropy", optimizer=Adam(0.001),metrics=['accuracy']) 
 
-    history = model.fit(tokenized_data, labels, epochs=num_epochs, verbose=True, callbacks=[lr_scheduler], class_weight=class_weights_dict)
+    if not test_data is None:
+        history = model.fit(tokenized_data, labels, epochs=num_epochs, verbose=True, callbacks=[lr_scheduler],
+                             class_weight=class_weights_dict, validation_data=(tokenized_test, labels_test))
+    else:
+        history = model.fit(tokenized_data, labels, epochs=num_epochs, verbose=True, callbacks=[lr_scheduler],
+                             class_weight=class_weights_dict)
 
     if save:
         model.save_pretrained('overall_model')

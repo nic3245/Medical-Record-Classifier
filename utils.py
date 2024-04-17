@@ -107,13 +107,20 @@ def get_f1_scores_for_labels(labels, y_true_source, y_pred_source, verbose=True)
             else:
                 mprecision = mtp / (mtp + mfp)
                 mrecall = mtp / (mtp + mfn)
-            nprecision = ntp / (ntp + nfp)
-            nrecall = ntp / (ntp + nfn)
+            if ntp == 0:
+                nprecision = 0
+                nrecall = 0
+            else:
+                nprecision = ntp / (ntp + nfp)
+                nrecall = ntp / (ntp + nfn)
             if mprecision == 0 or mrecall == 0:
                 mf1 = 0
             else:
                 mf1 = 2*mprecision*mrecall / (mprecision + mrecall)
-            nf1 = 2*nprecision*nrecall / (nprecision + nrecall)
+            if nprecision == 0 or nrecall == 0:
+                nf1 = 0
+            else:
+                nf1 = 2*nprecision*nrecall / (nprecision + nrecall)
             micro_f1 = (mf1 + nf1) / 2
             label_to_micro_f1[label] = micro_f1
             if verbose:

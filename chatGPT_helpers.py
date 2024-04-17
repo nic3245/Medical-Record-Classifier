@@ -2,12 +2,10 @@ import openai
 from openai import OpenAI
 import pickle
 from utils import tokenize_data, truncate_clinical_note
+import os
 
-
-key = "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"
+key = os.environ.get("OPENAI_API_KEY")
 client = OpenAI(
-    # This is the default and can be omitted
-    #api_key=os.environ.get("OPENAI_API_KEY"),
     api_key= key
 )
 
@@ -124,18 +122,3 @@ def summarize_and_save_notes(notes, name='train', MAX_TOKENS=3500):
         return summaries
     except RuntimeError:
         return summaries
-    
-
-
-
-
-
-note = "Past medical history: 1. CAD- details above 2. DM - on glyburide and metformin 3. Trigeminal neuralgia - on lyrica and tegretol 4. Hypothyroidism - on synthroid 5. Hyperlipidemia 6. HTN"
-note_2 = "He was found to be in congestive heart failure. He was given plavix, aspirin, lovenox and IV lasix with improvement in symptoms. On 08/31/2135, he was transferred to Gibson Community Hospital for cardiac catheterization. The results were significant for multivessel coronary artery disease and moderate mitral valve regurgitation with an left ventricular ejection fraction of 25 to 30%. He was referred to Dr. Sebastian Dang for elective cardiac surgical revascularization and possible mitral valve repair. He was discharged to home on 09/02/2135."
-# clinal_note_1 = patient_notes_data['notes']
-# assert generate_text_from_label(clinal_note_1, label='ABDOMINAL')
-
-
-# Example test of summarizing
-# print(summarize_prompt(note_2))
-
