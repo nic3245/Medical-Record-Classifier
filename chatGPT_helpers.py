@@ -1,19 +1,19 @@
-import openai
-from openai import OpenAI
+# import openai
+# from openai import OpenAI
 import pickle
 from utils import tokenize_data, truncate_clinical_note
 import os
 
 # Set up openAI api key
-key = os.environ.get("OPENAI_API_KEY")
-client = OpenAI(
-    api_key= key
-)
+# key = os.environ.get("OPENAI_API_KEY")
+# client = OpenAI(
+#     api_key= key
+# )
 
-openai.api_key = key
+# openai.api_key = key
 
 
-def zero_shot_prompt(note, label, MAX_TOKENS=3500, verbose=False):
+def zero_shot_prompt(note, model, tokenizer, label, MAX_TOKENS=3500, verbose=False):
     '''
     Asks the api if the given note meets the requirements associated with the given label.
 
@@ -38,27 +38,19 @@ def zero_shot_prompt(note, label, MAX_TOKENS=3500, verbose=False):
     "HBA1C": "Any hemoglobin A1c (HbA1c) value between 6.5% and 9.5%",
     "CREATININE": "Serum creatinine > upper limit of normal",
     }
+
     if verbose:
         print("predicting note:", note[10:15], "for label:", label) 
         print("truncating note...")
+
     # Truncate the note, if needed
-    words = truncate_clinical_note(tokenize_data(note), MAX_TOKENS)
+    words = tokenize_data(note)
     prompt = f"Please check this requirement: f{requirements[label]}. Is this requirement met? Answer with YES, NO, or UNSURE."
     words_with_prompt = words + "\n" + prompt
     # Prompt the API
-    chat_completion = openai.chat.completions.create(
-        messages=[
-            {
-                "role": "user",
-                "content": f"{words_with_prompt}",
-            }
-        ],
-        model="gpt-3.5-turbo",
-        max_tokens=2,
-        temperature=.3 # Low temperature used b/c we don't want too much confidence
-    )
-    # Get response
-    response = chat_completion.choices[0].message.content
+    inputs = tokenizer(words_with_prompt, return_tensors="pt").to("cuda")  # Send to GPU if available
+    outputs = model.generate(inputs.input_ids, max_length=1)
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True).strip().lower()
     if verbose:
         print("Prediction complete with:", response)
     return response
